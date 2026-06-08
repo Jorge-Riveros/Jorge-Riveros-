@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Luminic Realism, an artistic portfolio by Chilean painter Jorge Riveros."
+    />
+    <title>Luminic Realism | Jorge Riveros</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="images/observable-universe-hero.jpg"
+      fetchpriority="high"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260608-lightbox-wall-2" />
+  </head>
+  <body>
+    <canvas id="filament-canvas" aria-hidden="true"></canvas>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="Luminic Realism home">LR</a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#works">Works</a>
+        <a href="#statement">Statement</a>
+        <a href="#about">About</a>
+        <a href="#cv">CV</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero section" id="home">
+        <figure class="hero-artwork" aria-hidden="true">
+          <img
+            src="images/observable-universe-hero.jpg"
+            alt=""
+            decoding="async"
+            fetchpriority="high"
+          />
+        </figure>
+        <div class="hero-inner">
+          <p class="eyebrow">Jorge Riveros</p>
+          <h1>Luminic Realism</h1>
+          <p class="subtitle">Painting the body of light</p>
+          <p class="intro">Where light crosses matter.</p>
+        </div>
+      </section>
+
+      <section class="section works-section" id="works">
+        <div class="section-heading">
+          <p class="eyebrow">Selected Works</p>
+          <h2>Light crossing matter</h2>
+        </div>
+
+        <div class="gallery" aria-label="Artwork gallery">
+          <button class="work-card" data-title="Origin" data-image="images/origin.jpg">
+            <span class="work-artwork">
+              <img
+                src="images/origin.jpg"
+                alt="Origin by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Origin</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Observable Universe"
+            data-image="images/observable-universe.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/observable-universe.jpg"
+                alt="Observable Universe by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Observable Universe</span>
+            </span>
+          </button>
+          <button class="work-card" data-title="Seed" data-image="images/seed.jpg">
+            <span class="work-artwork">
+              <img
+                src="images/seed.jpg"
+                alt="Seed by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Seed</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Warm Rain"
+            data-image="images/warm-rain.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/warm-rain.jpg"
+                alt="Warm Rain by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Warm Rain</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Double Gaze"
+            data-image="images/double-gaze.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/double-gaze.jpg"
+                alt="Double Gaze by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Double Gaze</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Bodylight"
+            data-image="images/body-light.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/body-light.jpg"
+                alt="Bodylight by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Bodylight</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <section class="section text-section" id="statement">
+        <div class="text-block">
+          <p class="eyebrow">Statement</p>
+          <h2>Painting as shifting perception</h2>
+          <p>
+            Light moves through matter. Forms emerge, dissolve, and return.
+            Through atmospheric fields and layered veils, these paintings invite
+            a slower way of seeing, where perception itself becomes part of the
+            work.
+          </p>
+        </div>
+      </section>
+
+      <section class="section text-section about-section" id="about">
+        <figure class="artist-portrait">
+          <img
+            src="images/jorge-riveros-profile.jpg"
+            alt="Portrait of Jorge Riveros"
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
+        <div class="text-block">
+          <p class="eyebrow">About</p>
+          <h2>Jorge Riveros</h2>
+          <p>
+            Jorge Riveros is a Chilean self-taught painter. After exhibiting
+            internationally and developing his career in Central America, he
+            stepped away from painting for nearly two decades. Years later, he
+            withdrew to the mountains, where Luminic Realism emerged.
+          </p>
+        </div>
+      </section>
+
+      <section class="section cv-section" id="cv">
+        <div class="section-heading">
+          <p class="eyebrow">CV</p>
+          <h2>Selected exhibitions</h2>
+        </div>
+        <div class="cv-content">
+          <ol class="exhibition-list is-collapsed" id="exhibition-list" aria-label="Selected exhibitions">
+            <li>
+              <span>2006</span>
+              <p>Threads of Reality, Galeria Alternativa, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Art Basel Miami, with Galeria Alternativa, Miami, United States</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Colors of the Soul, Praxis Gallery, Santiago, Chile</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Permanent Transparency, Galeria Alternativa, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2004</span>
+              <p>Vital Pulse, Galeria Alternativa (Elvira Nery), Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2003</span>
+              <p>Shhhh, Lastimarte Gallery, Miami, United States</p>
+            </li>
+            <li>
+              <span>2003</span>
+              <p>Moderato: Nadadist Evanescence, Sala de Espera Gallery, Bogota, Colombia</p>
+            </li>
+            <li>
+              <span>2002</span>
+              <p>Small-Scale and Micro Landscape, Cuadra Creativa Gallery, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2002</span>
+              <p>The Poetics of Space, Sala de Espera Gallery, Bogota, Colombia</p>
+            </li>
+            <li>
+              <span>1999</span>
+              <p>Polo Club Gallery, Zapallar, Chile</p>
+            </li>
+          </ol>
+          <a
+            class="cv-download"
+            href="cv/Jorge_Riveros_CV_Selected_Exhibitions_EN.pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download selected exhibitions PDF
+          </a>
+          <button
+            class="cv-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="exhibition-list"
+          >
+            View full exhibition history
+          </button>
+        </div>
+      </section>
+
+      <section class="section contact-section" id="contact">
+        <div class="section-heading">
+          <p class="eyebrow">Contact</p>
+          <h2>Studio inquiries</h2>
+        </div>
+        <div class="contact-links">
+          <a href="mailto:wavegiorgio@gmail.com">wavegiorgio@gmail.com</a>
+          <a href="https://www.instagram.com/luminicrealism" target="_blank" rel="noreferrer">
+            @luminicrealism
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-label="Artwork preview">
+      <button class="lightbox-close" type="button" aria-label="Close artwork preview">&times;</button>
+      <button class="lightbox-nav lightbox-prev" type="button" aria-label="Previous artwork">‹</button>
+      <button class="lightbox-nav lightbox-next" type="button" aria-label="Next artwork">›</button>
+      <div class="lightbox-tools" aria-label="Artwork zoom controls">
+        <button type="button" class="zoom-control" data-zoom="out" aria-label="Zoom out">-</button>
+        <button type="button" class="zoom-control" data-zoom="reset" aria-label="Reset zoom">1:1</button>
+        <button type="button" class="zoom-control" data-zoom="in" aria-label="Zoom in">+</button>
+      </div>
+      <aside class="artwork-label" aria-label="Artwork information">
+        <dl>
+          <div>
+            <dd id="label-title"></dd>
+          </div>
+          <div>
+            <dd id="label-medium"></dd>
+          </div>
+          <div>
+            <dd id="label-dimensions"></dd>
+          </div>
+          <div>
+            <dd id="label-year"></dd>
+          </div>
+        </dl>
+      </aside>
+      <figure class="lightbox-content" aria-label="Artwork image">
+        <div class="lightbox-viewport" id="lightbox-viewport">
+          <img src="" alt="" id="lightbox-image" draggable="false" />
+        </div>
+      </figure>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
