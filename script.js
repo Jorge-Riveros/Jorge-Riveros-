@@ -41,10 +41,6 @@ const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)")
 let isMobileView = mobileMedia.matches;
 let scrollSettlingTimer = null;
 let isScrollSettling = false;
-
-if (!isMobileView) {
-  document.documentElement.classList.add("has-scroll-reveal");
-}
 const filamentTones = [
   [255, 118, 128],
   [255, 144, 172],
@@ -218,9 +214,9 @@ function resizeCanvas() {
 function createFilaments() {
   createClusters();
 
-  const density = isMobileView ? 0.14 : 0.56;
+  const density = isMobileView ? 0.14 : 0.62;
   const minimum = isMobileView ? 68 : 180;
-  const maximum = isMobileView ? 96 : 430;
+  const maximum = isMobileView ? 96 : 500;
   const count = Math.min(maximum, Math.max(minimum, Math.floor(width * density)));
 
   filaments = Array.from({ length: count }, () => {
@@ -264,7 +260,7 @@ function createFilament(initialY) {
     x: clusterX(),
     y: initialY ?? randomTopY(length),
     length,
-    speed: (isMobileView ? 120 : 150) + Math.random() * (isMobileView ? 190 : 260),
+    speed: (isMobileView ? 120 : 165) + Math.random() * (isMobileView ? 190 : 255),
     alpha,
     drift: 0.35 + Math.random() * 1.85,
     phase: Math.random() * Math.PI * 2,
@@ -277,12 +273,6 @@ function createFilament(initialY) {
 }
 
 function drawFilaments(timestamp = 0) {
-  if (shouldAnimateFilaments && isMobileView && isScrollSettling) {
-    lastFrameTime = timestamp;
-    animationFrame = requestAnimationFrame(drawFilaments);
-    return;
-  }
-
   if (shouldAnimateFilaments && isMobileView && timestamp - lastCanvasDrawTime < 48) {
     animationFrame = requestAnimationFrame(drawFilaments);
     return;
@@ -413,48 +403,8 @@ function activateWorkCard(card) {
   document.documentElement.classList.add("is-viewing-work");
 }
 
-if (!isMobileView && "IntersectionObserver" in window) {
-  const revealObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-
-        entry.target.classList.add("is-visible");
-
-        if (entry.intersectionRatio > 0.42) {
-          activateWorkCard(entry.target);
-        }
-      });
-    },
-    {
-      threshold: [0.18, 0.42, 0.68],
-      rootMargin: "-12% 0px -12% 0px",
-    }
-  );
-
-  workCards.forEach((card) => revealObserver.observe(card));
-
-  const sectionObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible-section");
-        }
-      });
-    },
-    {
-      threshold: 0.24,
-      rootMargin: "-10% 0px -10% 0px",
-    }
-  );
-
-  revealSections.forEach((section) => sectionObserver.observe(section));
-} else {
-  workCards.forEach((card) => card.classList.add("is-visible"));
-  revealSections.forEach((section) => section.classList.add("is-visible-section"));
-}
+workCards.forEach((card) => card.classList.add("is-visible"));
+revealSections.forEach((section) => section.classList.add("is-visible-section"));
 
 workImages.forEach((image) => {
   const card = image.closest(".work-card");
@@ -520,14 +470,22 @@ lightboxViewport.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 lightboxViewport.addEventListener("dblclick", () => {
+  if (isMobileView) {
+    return;
+  }
+
   setZoom(zoomLevel > 1.01 ? 1 : 2.2);
 });
 
 lightboxViewport.addEventListener("pointerdown", (event) => {
   event.preventDefault();
 
-  if (zoomLevel <= 1.01) {
+  if (!isMobileView && zoomLevel <= 1.01) {
     setZoom(2.2);
+  }
+
+  if (isMobileView && zoomLevel <= 1.01) {
+    return;
   }
 
   isDraggingArtwork = true;
@@ -569,24 +527,6 @@ lightboxViewport.addEventListener("pointerup", endArtworkDrag);
 lightboxViewport.addEventListener("pointercancel", endArtworkDrag);
 lightboxViewport.addEventListener("lostpointercapture", endArtworkDrag);
 
-window.addEventListener(
-  "scroll",
-  () => {
-    if (!isMobileView) {
-      return;
-    }
-
-    document.documentElement.classList.add("is-mobile-scrolling");
-    isScrollSettling = true;
-    window.clearTimeout(scrollSettlingTimer);
-    scrollSettlingTimer = window.setTimeout(() => {
-      isScrollSettling = false;
-      document.documentElement.classList.remove("is-mobile-scrolling");
-    }, 180);
-  },
-  { passive: true }
-);
-
 lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox) {
     closeLightbox();
@@ -624,9 +564,16 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => {
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+
   resizeCanvas();
+  lastFrameTime = 0;
+  lastCanvasDrawTime = 0;
   shouldAnimateFilaments = !isMobileView && !reducedMotionMedia.matches;
-  document.documentElement.classList.toggle("has-scroll-reveal", !isMobileView);
+  drawFilaments(0);
   applyZoom();
 });
 
