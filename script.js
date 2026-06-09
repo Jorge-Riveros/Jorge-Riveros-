@@ -1,6 +1,5 @@
 const canvas = document.querySelector("#filament-canvas");
 const ctx = canvas.getContext("2d");
-document.documentElement.classList.add("has-scroll-reveal");
 
 const lightbox = document.querySelector("#lightbox");
 const lightboxViewport = document.querySelector("#lightbox-viewport");
@@ -25,6 +24,8 @@ let filaments = [];
 let clusters = [];
 let animationFrame = null;
 let lastFrameTime = 0;
+let lastCanvasDrawTime = 0;
+let shouldAnimateFilaments = true;
 let zoomLevel = 1;
 let panX = 0;
 let panY = 0;
@@ -35,6 +36,15 @@ let dragOriginX = 0;
 let dragOriginY = 0;
 let activeDragPointerId = null;
 let currentArtworkIndex = 0;
+const mobileMedia = window.matchMedia("(max-width: 720px)");
+const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+let isMobileView = mobileMedia.matches;
+let scrollSettlingTimer = null;
+let isScrollSettling = false;
+
+if (!isMobileView) {
+  document.documentElement.classList.add("has-scroll-reveal");
+}
 const filamentTones = [
   [255, 118, 128],
   [255, 144, 172],
@@ -87,6 +97,33 @@ const artworkDetails = {
     year: "2024",
   },
 };
+
+function revealImageWhenReady(image) {
+  const showImage = () => image.classList.add("is-loaded");
+
+  if (image.complete && image.naturalWidth > 0) {
+    if (image.decode) {
+      image.decode().then(showImage).catch(showImage);
+    } else {
+      showImage();
+    }
+    return;
+  }
+
+  image.addEventListener(
+    "load",
+    () => {
+      if (image.decode) {
+        image.decode().then(showImage).catch(showImage);
+      } else {
+        showImage();
+      }
+    },
+    { once: true }
+  );
+}
+
+workImages.forEach(revealImageWhenReady);
 
 function resolveAssetPath(path) {
   if (window.location.protocol === "file:" && path.startsWith("/")) {
@@ -166,7 +203,8 @@ function changeZoom(direction) {
 }
 
 function resizeCanvas() {
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  isMobileView = mobileMedia.matches;
+  const pixelRatio = isMobileView ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
   width = window.innerWidth;
   height = window.innerHeight;
   canvas.width = width * pixelRatio;
@@ -180,8 +218,10 @@ function resizeCanvas() {
 function createFilaments() {
   createClusters();
 
-  const density = width < 620 ? 0.42 : 0.62;
-  const count = Math.min(width < 620 ? 260 : 540, Math.max(210, Math.floor(width * density)));
+  const density = isMobileView ? 0.14 : 0.56;
+  const minimum = isMobileView ? 68 : 180;
+  const maximum = isMobileView ? 96 : 430;
+  const count = Math.min(maximum, Math.max(minimum, Math.floor(width * density)));
 
   filaments = Array.from({ length: count }, () => {
     const filament = createFilament();
@@ -191,7 +231,7 @@ function createFilaments() {
 }
 
 function createClusters() {
-  const count = width < 620 ? 5 : 9;
+  const count = isMobileView ? 4 : 8;
 
   clusters = Array.from({ length: count }, () => ({
     x: Math.random() * width,
@@ -224,19 +264,31 @@ function createFilament(initialY) {
     x: clusterX(),
     y: initialY ?? randomTopY(length),
     length,
-    speed: 150 + Math.random() * 260,
+    speed: (isMobileView ? 120 : 150) + Math.random() * (isMobileView ? 190 : 260),
     alpha,
     drift: 0.35 + Math.random() * 1.85,
     phase: Math.random() * Math.PI * 2,
     phaseSpeed: 0.08 + Math.random() * 0.18,
     tone,
     width: 0.24 + Math.random() * (longStrand ? 0.68 : 0.44),
-    blur: 1 + Math.random() * 3.5,
+    blur: isMobileView ? 0 : 1 + Math.random() * 2.6,
     glow: clustered ? 0.9 + Math.random() * 0.65 : 0.6 + Math.random() * 0.45,
   };
 }
 
 function drawFilaments(timestamp = 0) {
+  if (shouldAnimateFilaments && isMobileView && isScrollSettling) {
+    lastFrameTime = timestamp;
+    animationFrame = requestAnimationFrame(drawFilaments);
+    return;
+  }
+
+  if (shouldAnimateFilaments && isMobileView && timestamp - lastCanvasDrawTime < 48) {
+    animationFrame = requestAnimationFrame(drawFilaments);
+    return;
+  }
+
+  lastCanvasDrawTime = timestamp;
   const elapsed = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 1000, 0.05) : 0.016;
   lastFrameTime = timestamp;
 
@@ -254,24 +306,32 @@ function drawFilaments(timestamp = 0) {
     const x = filament.x + Math.sin(filament.phase + filament.y * 0.002) * filament.drift;
     const topY = filament.y - filament.length;
     const [red, green, blue] = filament.tone;
-    const gradient = ctx.createLinearGradient(x, topY, x, filament.y);
     const pulse = 0.82 + Math.sin(filament.phase * 2.4) * 0.18;
     const alpha = filament.alpha * pulse;
+    let strokeStyle = `rgba(${red}, ${green}, ${blue}, ${alpha * 0.82})`;
 
-    gradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
-    gradient.addColorStop(0.18, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.3})`);
-    gradient.addColorStop(0.56, `rgba(${red}, ${green}, ${blue}, ${alpha})`);
-    gradient.addColorStop(0.9, `rgba(${red}, ${green}, ${blue}, ${alpha * 1.28})`);
-    gradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.16})`);
+    if (!isMobileView) {
+      const gradient = ctx.createLinearGradient(x, topY, x, filament.y);
+      gradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
+      gradient.addColorStop(0.18, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.3})`);
+      gradient.addColorStop(0.56, `rgba(${red}, ${green}, ${blue}, ${alpha})`);
+      gradient.addColorStop(0.9, `rgba(${red}, ${green}, ${blue}, ${alpha * 1.28})`);
+      gradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.16})`);
+      strokeStyle = gradient;
+    }
 
     ctx.save();
-    ctx.globalAlpha = 0.92;
+    ctx.globalAlpha = isMobileView ? 0.54 : 0.92;
     ctx.beginPath();
-    ctx.strokeStyle = gradient;
+    ctx.strokeStyle = strokeStyle;
     ctx.lineWidth = filament.width * filament.glow;
     ctx.lineCap = "round";
-    ctx.shadowColor = `rgba(${red}, ${green}, ${blue}, ${alpha * 1.65})`;
-    ctx.shadowBlur = filament.blur;
+    if (filament.blur > 0) {
+      ctx.shadowColor = `rgba(${red}, ${green}, ${blue}, ${alpha * 1.65})`;
+      ctx.shadowBlur = filament.blur;
+    } else {
+      ctx.shadowBlur = 0;
+    }
     ctx.moveTo(x, topY);
     ctx.lineTo(x, filament.y);
     ctx.stroke();
@@ -287,13 +347,17 @@ function drawFilaments(timestamp = 0) {
     ctx.restore();
   }
 
-  animationFrame = requestAnimationFrame(drawFilaments);
+  if (shouldAnimateFilaments) {
+    animationFrame = requestAnimationFrame(drawFilaments);
+  }
 }
 
 function startFilaments() {
   resizeCanvas();
   lastFrameTime = 0;
-  animationFrame = requestAnimationFrame(drawFilaments);
+  lastCanvasDrawTime = 0;
+  shouldAnimateFilaments = !isMobileView && !reducedMotionMedia.matches;
+  drawFilaments(0);
 }
 
 function openLightbox(card) {
@@ -349,7 +413,7 @@ function activateWorkCard(card) {
   document.documentElement.classList.add("is-viewing-work");
 }
 
-if ("IntersectionObserver" in window) {
+if (!isMobileView && "IntersectionObserver" in window) {
   const revealObserver = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -505,6 +569,24 @@ lightboxViewport.addEventListener("pointerup", endArtworkDrag);
 lightboxViewport.addEventListener("pointercancel", endArtworkDrag);
 lightboxViewport.addEventListener("lostpointercapture", endArtworkDrag);
 
+window.addEventListener(
+  "scroll",
+  () => {
+    if (!isMobileView) {
+      return;
+    }
+
+    document.documentElement.classList.add("is-mobile-scrolling");
+    isScrollSettling = true;
+    window.clearTimeout(scrollSettlingTimer);
+    scrollSettlingTimer = window.setTimeout(() => {
+      isScrollSettling = false;
+      document.documentElement.classList.remove("is-mobile-scrolling");
+    }, 180);
+  },
+  { passive: true }
+);
+
 lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox) {
     closeLightbox();
@@ -543,6 +625,8 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", () => {
   resizeCanvas();
+  shouldAnimateFilaments = !isMobileView && !reducedMotionMedia.matches;
+  document.documentElement.classList.toggle("has-scroll-reveal", !isMobileView);
   applyZoom();
 });
 
