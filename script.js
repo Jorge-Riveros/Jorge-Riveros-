@@ -1,549 +1,299 @@
-const canvas = document.querySelector("#filament-canvas");
-const ctx = canvas.getContext("2d");
-document.documentElement.classList.add("has-scroll-reveal");
-
-const lightbox = document.querySelector("#lightbox");
-const lightboxViewport = document.querySelector("#lightbox-viewport");
-const lightboxImage = document.querySelector("#lightbox-image");
-const labelTitle = document.querySelector("#label-title");
-const labelMedium = document.querySelector("#label-medium");
-const labelDimensions = document.querySelector("#label-dimensions");
-const labelYear = document.querySelector("#label-year");
-const closeButton = document.querySelector(".lightbox-close");
-const previousArtworkButton = document.querySelector(".lightbox-prev");
-const nextArtworkButton = document.querySelector(".lightbox-next");
-const zoomControls = document.querySelectorAll(".zoom-control");
-const workCards = document.querySelectorAll(".work-card");
-const workImages = document.querySelectorAll(".work-card img");
-const revealSections = document.querySelectorAll(".text-section, .cv-section, .contact-section");
-const exhibitionList = document.querySelector("#exhibition-list");
-const cvToggle = document.querySelector(".cv-toggle");
-
-let width = 0;
-let height = 0;
-let filaments = [];
-let clusters = [];
-let animationFrame = null;
-let lastFrameTime = 0;
-let zoomLevel = 1;
-let panX = 0;
-let panY = 0;
-let isDraggingArtwork = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let dragOriginX = 0;
-let dragOriginY = 0;
-let activeDragPointerId = null;
-let currentArtworkIndex = 0;
-const filamentTones = [
-  [255, 118, 128],
-  [255, 144, 172],
-  [238, 116, 206],
-  [186, 118, 255],
-  [132, 150, 255],
-  [92, 184, 255],
-  [72, 220, 214],
-  [112, 232, 150],
-  [196, 236, 92],
-  [255, 196, 78],
-  [255, 232, 178],
-  [236, 240, 246],
-];
-const artworkDetails = {
-  "Bodylight": {
-    title: "Body of Light",
-    medium: "Oil on Canvas",
-    dimensions: "150 × 100 cm",
-    year: "2023",
-  },
-  "Double Gaze": {
-    title: "Double Gaze",
-    medium: "Oil on Canvas",
-    dimensions: "150 × 100 cm",
-    year: "2023",
-  },
-  "Observable Universe": {
-    title: "Observable Universe",
-    medium: "Oil on Canvas",
-    dimensions: "150 × 50 cm",
-    year: "2024",
-  },
-  "Origin": {
-    title: "Origin",
-    medium: "Oil on Canvas",
-    dimensions: "180 × 140 cm",
-    year: "2024",
-  },
-  "Warm Rain": {
-    title: "Warm Rain",
-    medium: "Oil on Canvas",
-    dimensions: "100 × 100 cm",
-    year: "2025",
-  },
-  "Seed": {
-    title: "Seed",
-    medium: "Oil on Canvas",
-    dimensions: "150 × 100 cm",
-    year: "2024",
-  },
-};
-
-function resolveAssetPath(path) {
-  if (window.location.protocol === "file:" && path.startsWith("/")) {
-    return `.${path}`;
-  }
-
-  return path;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getContainedImageSize() {
-  const viewportWidth = lightboxViewport.clientWidth;
-  const viewportHeight = lightboxViewport.clientHeight;
-  const naturalWidth = lightboxImage.naturalWidth || viewportWidth;
-  const naturalHeight = lightboxImage.naturalHeight || viewportHeight;
-  const scale = Math.min(viewportWidth / naturalWidth, viewportHeight / naturalHeight);
-
-  return {
-    width: naturalWidth * scale,
-    height: naturalHeight * scale,
-  };
-}
-
-function applyZoom() {
-  if (!lightboxImage || !lightboxViewport) {
-    return;
-  }
-
-  const containedImage = getContainedImageSize();
-  const imageWidth = containedImage.width;
-  const imageHeight = containedImage.height;
-  const maxPanX = Math.max(0, ((imageWidth * zoomLevel) - lightboxViewport.clientWidth) / 2);
-  const maxPanY = Math.max(0, ((imageHeight * zoomLevel) - lightboxViewport.clientHeight) / 2);
-  panX = clamp(panX, -maxPanX, maxPanX);
-  panY = clamp(panY, -maxPanY, maxPanY);
-
-  lightboxImage.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoomLevel})`;
-  lightboxViewport.classList.toggle("is-zoomed", zoomLevel > 1.01);
-}
-
-function setZoom(nextZoom) {
-  const previousZoom = zoomLevel;
-  zoomLevel = clamp(nextZoom, 1, 4);
-
-  if (zoomLevel === 1 || previousZoom === 1) {
-    panX = 0;
-    panY = 0;
-  }
-
-  applyZoom();
-}
-
-function resetZoom() {
-  zoomLevel = 1;
-  panX = 0;
-  panY = 0;
-  applyZoom();
-}
-
-function resetZoomAfterLayout() {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(resetZoom);
-  });
-}
-
-function changeZoom(direction) {
-  if (direction === "reset") {
-    resetZoom();
-    return;
-  }
-
-  const step = direction === "in" ? 0.35 : -0.35;
-  setZoom(zoomLevel + step);
-}
-
-function resizeCanvas() {
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  width = window.innerWidth;
-  height = window.innerHeight;
-  canvas.width = width * pixelRatio;
-  canvas.height = height * pixelRatio;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  createFilaments();
-}
-
-function createFilaments() {
-  createClusters();
-
-  const density = width < 620 ? 0.42 : 0.62;
-  const count = Math.min(width < 620 ? 260 : 540, Math.max(210, Math.floor(width * density)));
-
-  filaments = Array.from({ length: count }, () => {
-    const filament = createFilament();
-    filament.y = Math.random() * (height + filament.length) - filament.length;
-    return filament;
-  });
-}
-
-function createClusters() {
-  const count = width < 620 ? 5 : 9;
-
-  clusters = Array.from({ length: count }, () => ({
-    x: Math.random() * width,
-    width: width * (0.055 + Math.random() * 0.13),
-    strength: 0.35 + Math.random() * 0.7,
-  }));
-}
-
-function randomTopY(length) {
-  return -length - Math.random() * height * 0.18;
-}
-
-function clusterX() {
-  if (clusters.length && Math.random() > 0.62) {
-    const cluster = clusters[Math.floor(Math.random() * clusters.length)];
-    return cluster.x + (Math.random() - 0.5) * cluster.width * (0.8 + Math.random() * 1.9);
-  }
-
-  return Math.random() * width;
-}
-
-function createFilament(initialY) {
-  const tone = filamentTones[Math.floor(Math.random() * filamentTones.length)];
-  const clustered = Math.random() > 0.68;
-  const longStrand = Math.random() > 0.82;
-  const length = longStrand ? 96 + Math.random() * 120 : 34 + Math.random() * 92;
-  const alpha = clustered ? 0.064 + Math.random() * 0.078 : 0.042 + Math.random() * 0.058;
-
-  return {
-    x: clusterX(),
-    y: initialY ?? randomTopY(length),
-    length,
-    speed: 150 + Math.random() * 260,
-    alpha,
-    drift: 0.35 + Math.random() * 1.85,
-    phase: Math.random() * Math.PI * 2,
-    phaseSpeed: 0.08 + Math.random() * 0.18,
-    tone,
-    width: 0.24 + Math.random() * (longStrand ? 0.68 : 0.44),
-    blur: 1 + Math.random() * 3.5,
-    glow: clustered ? 0.9 + Math.random() * 0.65 : 0.6 + Math.random() * 0.45,
-  };
-}
-
-function drawFilaments(timestamp = 0) {
-  const elapsed = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 1000, 0.05) : 0.016;
-  lastFrameTime = timestamp;
-
-  ctx.clearRect(0, 0, width, height);
-  ctx.globalCompositeOperation = "source-over";
-
-  for (const filament of filaments) {
-    filament.y += filament.speed * elapsed;
-    filament.phase += filament.phaseSpeed * elapsed;
-
-    if (filament.y - filament.length > height) {
-      Object.assign(filament, createFilament());
-    }
-
-    const x = filament.x + Math.sin(filament.phase + filament.y * 0.002) * filament.drift;
-    const topY = filament.y - filament.length;
-    const [red, green, blue] = filament.tone;
-    const gradient = ctx.createLinearGradient(x, topY, x, filament.y);
-    const pulse = 0.82 + Math.sin(filament.phase * 2.4) * 0.18;
-    const alpha = filament.alpha * pulse;
-
-    gradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
-    gradient.addColorStop(0.18, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.3})`);
-    gradient.addColorStop(0.56, `rgba(${red}, ${green}, ${blue}, ${alpha})`);
-    gradient.addColorStop(0.9, `rgba(${red}, ${green}, ${blue}, ${alpha * 1.28})`);
-    gradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, ${alpha * 0.16})`);
-
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.beginPath();
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = filament.width * filament.glow;
-    ctx.lineCap = "round";
-    ctx.shadowColor = `rgba(${red}, ${green}, ${blue}, ${alpha * 1.65})`;
-    ctx.shadowBlur = filament.blur;
-    ctx.moveTo(x, topY);
-    ctx.lineTo(x, filament.y);
-    ctx.stroke();
-
-    if (filament.width > 0.68) {
-      ctx.globalAlpha = 0.32;
-      ctx.lineWidth = Math.max(0.22, filament.width * 0.42);
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = `rgba(${red}, ${green}, ${blue}, ${alpha * 0.52})`;
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  animationFrame = requestAnimationFrame(drawFilaments);
-}
-
-function startFilaments() {
-  resizeCanvas();
-  lastFrameTime = 0;
-  animationFrame = requestAnimationFrame(drawFilaments);
-}
-
-function openLightbox(card) {
-  const title = card.dataset.title;
-  const image = resolveAssetPath(card.dataset.image);
-  const details = artworkDetails[title] || {
-    title,
-    medium: "Oil on Canvas",
-    dimensions: "",
-    year: "",
-  };
-
-  resetZoom();
-  lightboxImage.onload = resetZoomAfterLayout;
-  lightboxImage.src = image;
-  lightboxImage.alt = `${details.title} by Jorge Riveros`;
-  labelTitle.textContent = details.title;
-  labelMedium.textContent = details.medium;
-  labelDimensions.textContent = details.dimensions;
-  labelYear.textContent = details.year;
-  lightbox.classList.add("is-open");
-  lightbox.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
-  resetZoomAfterLayout();
-  closeButton.focus();
-}
-
-function openArtworkAt(index) {
-  const normalizedIndex = (index + workCards.length) % workCards.length;
-  currentArtworkIndex = normalizedIndex;
-  openLightbox(workCards[normalizedIndex]);
-}
-
-function closeLightbox() {
-  lightbox.classList.remove("is-open");
-  lightbox.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-  lightboxImage.onload = null;
-  resetZoom();
-}
-
-workCards.forEach((card) => {
-  card.addEventListener("click", () => {
-    currentArtworkIndex = Array.from(workCards).indexOf(card);
-    openLightbox(card);
-  });
-});
-
-function activateWorkCard(card) {
-  workCards.forEach((item) => {
-    item.classList.toggle("is-active", item === card);
-  });
-  document.documentElement.classList.add("is-viewing-work");
-}
-
-if ("IntersectionObserver" in window) {
-  const revealObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-
-        entry.target.classList.add("is-visible");
-
-        if (entry.intersectionRatio > 0.42) {
-          activateWorkCard(entry.target);
-        }
-      });
-    },
-    {
-      threshold: [0.18, 0.42, 0.68],
-      rootMargin: "-12% 0px -12% 0px",
-    }
-  );
-
-  workCards.forEach((card) => revealObserver.observe(card));
-
-  const sectionObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible-section");
-        }
-      });
-    },
-    {
-      threshold: 0.24,
-      rootMargin: "-10% 0px -10% 0px",
-    }
-  );
-
-  revealSections.forEach((section) => sectionObserver.observe(section));
-} else {
-  workCards.forEach((card) => card.classList.add("is-visible"));
-  revealSections.forEach((section) => section.classList.add("is-visible-section"));
-}
-
-workImages.forEach((image) => {
-  const card = image.closest(".work-card");
-
-  image.addEventListener("pointerenter", () => {
-    card?.classList.add("is-artwork-hovered");
-    card?.classList.add("is-title-revealed");
-  });
-
-  image.addEventListener("pointerleave", () => {
-    card?.classList.remove("is-artwork-hovered");
-    card?.classList.remove("is-title-revealed");
-  });
-
-  image.addEventListener(
-    "error",
-    () => {
-      if (image.dataset.fallbackApplied) {
-        return;
-      }
-
-      image.dataset.fallbackApplied = "true";
-      image.src = resolveAssetPath(image.getAttribute("src"));
-    },
-    { once: true }
-  );
-});
-
-closeButton.addEventListener("click", closeLightbox);
-
-previousArtworkButton.addEventListener("click", () => {
-  openArtworkAt(currentArtworkIndex - 1);
-});
-
-nextArtworkButton.addEventListener("click", () => {
-  openArtworkAt(currentArtworkIndex + 1);
-});
-
-if (cvToggle && exhibitionList) {
-  cvToggle.addEventListener("click", () => {
-    const isExpanded = cvToggle.getAttribute("aria-expanded") === "true";
-    cvToggle.setAttribute("aria-expanded", String(!isExpanded));
-    exhibitionList.classList.toggle("is-collapsed", isExpanded);
-    cvToggle.textContent = isExpanded
-      ? "View full exhibition history"
-      : "Show fewer exhibitions";
-  });
-}
-
-zoomControls.forEach((control) => {
-  control.addEventListener("click", () => {
-    changeZoom(control.dataset.zoom);
-  });
-});
-
-lightboxViewport.addEventListener("wheel", (event) => {
-  if (!lightbox.classList.contains("is-open")) {
-    return;
-  }
-
-  event.preventDefault();
-  setZoom(zoomLevel + (event.deltaY < 0 ? 0.18 : -0.18));
-}, { passive: false });
-
-lightboxViewport.addEventListener("dblclick", () => {
-  setZoom(zoomLevel > 1.01 ? 1 : 2.2);
-});
-
-lightboxViewport.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-
-  if (zoomLevel <= 1.01) {
-    setZoom(2.2);
-  }
-
-  isDraggingArtwork = true;
-  activeDragPointerId = event.pointerId;
-  dragStartX = event.clientX;
-  dragStartY = event.clientY;
-  dragOriginX = panX;
-  dragOriginY = panY;
-  lightboxViewport.classList.add("is-dragging");
-  lightboxViewport.setPointerCapture(event.pointerId);
-});
-
-lightboxViewport.addEventListener("pointermove", (event) => {
-  if (!isDraggingArtwork || event.pointerId !== activeDragPointerId) {
-    return;
-  }
-
-  event.preventDefault();
-  panX = dragOriginX + event.clientX - dragStartX;
-  panY = dragOriginY + event.clientY - dragStartY;
-  applyZoom();
-});
-
-function endArtworkDrag(event) {
-  if (!isDraggingArtwork) {
-    return;
-  }
-
-  isDraggingArtwork = false;
-  activeDragPointerId = null;
-  lightboxViewport.classList.remove("is-dragging");
-
-  if (event?.pointerId && lightboxViewport.hasPointerCapture(event.pointerId)) {
-    lightboxViewport.releasePointerCapture(event.pointerId);
-  }
-}
-
-lightboxViewport.addEventListener("pointerup", endArtworkDrag);
-lightboxViewport.addEventListener("pointercancel", endArtworkDrag);
-lightboxViewport.addEventListener("lostpointercapture", endArtworkDrag);
-
-lightbox.addEventListener("click", (event) => {
-  if (event.target === lightbox) {
-    closeLightbox();
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && lightbox.classList.contains("is-open")) {
-    closeLightbox();
-  }
-
-  if (!lightbox.classList.contains("is-open")) {
-    return;
-  }
-
-  if (event.key === "+" || event.key === "=") {
-    changeZoom("in");
-  }
-
-  if (event.key === "-") {
-    changeZoom("out");
-  }
-
-  if (event.key === "0") {
-    resetZoom();
-  }
-
-  if (event.key === "ArrowLeft") {
-    openArtworkAt(currentArtworkIndex - 1);
-  }
-
-  if (event.key === "ArrowRight") {
-    openArtworkAt(currentArtworkIndex + 1);
-  }
-});
-
-window.addEventListener("resize", () => {
-  resizeCanvas();
-  applyZoom();
-});
-
-startFilaments();
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Luminic Realism, an artistic portfolio by Chilean painter Jorge Riveros."
+    />
+    <title>Luminic Realism | Jorge Riveros</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="images/observable-universe-hero.jpg"
+      fetchpriority="high"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260608-lightbox-wall-2" />
+  </head>
+  <body>
+    <canvas id="filament-canvas" aria-hidden="true"></canvas>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="Luminic Realism home">LR</a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#works">Works</a>
+        <a href="#statement">Statement</a>
+        <a href="#about">About</a>
+        <a href="#cv">CV</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero section" id="home">
+        <figure class="hero-artwork" aria-hidden="true">
+          <img
+            src="images/observable-universe-hero.jpg"
+            alt=""
+            decoding="async"
+            fetchpriority="high"
+          />
+        </figure>
+        <div class="hero-inner">
+          <p class="eyebrow">Jorge Riveros</p>
+          <h1>Luminic Realism</h1>
+          <p class="subtitle">Painting the body of light</p>
+          <p class="intro">Where light crosses matter.</p>
+        </div>
+      </section>
+
+      <section class="section works-section" id="works">
+        <div class="section-heading">
+          <p class="eyebrow">Selected Works</p>
+          <h2>Light crossing matter</h2>
+        </div>
+
+        <div class="gallery" aria-label="Artwork gallery">
+          <button class="work-card" data-title="Origin" data-image="images/origin.jpg">
+            <span class="work-artwork">
+              <img
+                src="images/origin.jpg"
+                alt="Origin by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Origin</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Observable Universe"
+            data-image="images/observable-universe.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/observable-universe.jpg"
+                alt="Observable Universe by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Observable Universe</span>
+            </span>
+          </button>
+          <button class="work-card" data-title="Seed" data-image="images/seed.jpg">
+            <span class="work-artwork">
+              <img
+                src="images/seed.jpg"
+                alt="Seed by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Seed</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Warm Rain"
+            data-image="images/warm-rain.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/warm-rain.jpg"
+                alt="Warm Rain by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Warm Rain</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Double Gaze"
+            data-image="images/double-gaze.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/double-gaze.jpg"
+                alt="Double Gaze by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Double Gaze</span>
+            </span>
+          </button>
+          <button
+            class="work-card"
+            data-title="Bodylight"
+            data-image="images/body-light.jpg"
+          >
+            <span class="work-artwork">
+              <img
+                src="images/body-light.jpg"
+                alt="Bodylight by Jorge Riveros"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="work-title">Bodylight</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <section class="section text-section" id="statement">
+        <div class="text-block">
+          <p class="eyebrow">Statement</p>
+          <h2>Painting as shifting perception</h2>
+          <p>
+            Light moves through matter. Forms emerge, dissolve, and return.
+            Through atmospheric fields and layered veils, these paintings invite
+            a slower way of seeing, where perception itself becomes part of the
+            work.
+          </p>
+        </div>
+      </section>
+
+      <section class="section text-section about-section" id="about">
+        <figure class="artist-portrait">
+          <img
+            src="images/jorge-riveros-profile.jpg"
+            alt="Portrait of Jorge Riveros"
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
+        <div class="text-block">
+          <p class="eyebrow">About</p>
+          <h2>Jorge Riveros</h2>
+          <p>
+            Jorge Riveros is a Chilean self-taught painter. After exhibiting
+            internationally and developing his career in Central America, he
+            stepped away from painting for nearly two decades. Years later, he
+            withdrew to the mountains, where Luminic Realism emerged.
+          </p>
+        </div>
+      </section>
+
+      <section class="section cv-section" id="cv">
+        <div class="section-heading">
+          <p class="eyebrow">CV</p>
+          <h2>Selected exhibitions</h2>
+        </div>
+        <div class="cv-content">
+          <ol class="exhibition-list is-collapsed" id="exhibition-list" aria-label="Selected exhibitions">
+            <li>
+              <span>2006</span>
+              <p>Threads of Reality, Galeria Alternativa, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Art Basel Miami, with Galeria Alternativa, Miami, United States</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Colors of the Soul, Praxis Gallery, Santiago, Chile</p>
+            </li>
+            <li>
+              <span>2005</span>
+              <p>Permanent Transparency, Galeria Alternativa, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2004</span>
+              <p>Vital Pulse, Galeria Alternativa (Elvira Nery), Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2003</span>
+              <p>Shhhh, Lastimarte Gallery, Miami, United States</p>
+            </li>
+            <li>
+              <span>2003</span>
+              <p>Moderato: Nadadist Evanescence, Sala de Espera Gallery, Bogota, Colombia</p>
+            </li>
+            <li>
+              <span>2002</span>
+              <p>Small-Scale and Micro Landscape, Cuadra Creativa Gallery, Caracas, Venezuela</p>
+            </li>
+            <li>
+              <span>2002</span>
+              <p>The Poetics of Space, Sala de Espera Gallery, Bogota, Colombia</p>
+            </li>
+            <li>
+              <span>1999</span>
+              <p>Polo Club Gallery, Zapallar, Chile</p>
+            </li>
+          </ol>
+          <a
+            class="cv-download"
+            href="cv/Jorge_Riveros_CV_Selected_Exhibitions_EN.pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download selected exhibitions PDF
+          </a>
+          <button
+            class="cv-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="exhibition-list"
+          >
+            View full exhibition history
+          </button>
+        </div>
+      </section>
+
+      <section class="section contact-section" id="contact">
+        <div class="section-heading">
+          <p class="eyebrow">Contact</p>
+          <h2>Studio inquiries</h2>
+        </div>
+        <div class="contact-links">
+          <a href="mailto:wavegiorgio@gmail.com">wavegiorgio@gmail.com</a>
+          <a href="https://www.instagram.com/luminicrealism" target="_blank" rel="noreferrer">
+            @luminicrealism
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-label="Artwork preview">
+      <button class="lightbox-close" type="button" aria-label="Close artwork preview">&times;</button>
+      <button class="lightbox-nav lightbox-prev" type="button" aria-label="Previous artwork">‹</button>
+      <button class="lightbox-nav lightbox-next" type="button" aria-label="Next artwork">›</button>
+      <div class="lightbox-tools" aria-label="Artwork zoom controls">
+        <button type="button" class="zoom-control" data-zoom="out" aria-label="Zoom out">-</button>
+        <button type="button" class="zoom-control" data-zoom="reset" aria-label="Reset zoom">1:1</button>
+        <button type="button" class="zoom-control" data-zoom="in" aria-label="Zoom in">+</button>
+      </div>
+      <aside class="artwork-label" aria-label="Artwork information">
+        <dl>
+          <div>
+            <dd id="label-title"></dd>
+          </div>
+          <div>
+            <dd id="label-medium"></dd>
+          </div>
+          <div>
+            <dd id="label-dimensions"></dd>
+          </div>
+          <div>
+            <dd id="label-year"></dd>
+          </div>
+        </dl>
+      </aside>
+      <figure class="lightbox-content" aria-label="Artwork image">
+        <div class="lightbox-viewport" id="lightbox-viewport">
+          <img src="" alt="" id="lightbox-image" draggable="false" />
+        </div>
+      </figure>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
